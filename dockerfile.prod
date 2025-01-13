@@ -1,0 +1,44 @@
+# Dependency Stage
+FROM node:21-alpine3.19 AS deps
+
+RUN npm install -g pnpm
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+
+RUN pnpm install
+
+
+# Builder Stage
+FROM node:21-alpine3.19 AS build
+
+RUN npm install -g pnpm
+
+WORKDIR /usr/src/app
+
+COPY --from=deps /usr/src/app/node_modules ./node_modules
+
+COPY . .
+
+RUN pnpm build
+
+RUN pnpm install --prod --frozen-lockfile && pnpm  store prune
+
+
+# Production Stage
+FROM node:21-alpine3.19 AS prod
+
+WORKDIR /usr/src/app
+
+COPY --from=build /usr/src/app/node_modules ./node_modules
+
+COPY --from=build /usr/src/app/dist ./dist
+
+ENV NODE_ENV=production
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
